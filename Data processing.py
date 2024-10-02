@@ -1,15 +1,15 @@
 import pandas as pd
 import numpy as np
 import tkinter as tk
-from tkinter import filedialog
+from tkinter import filedialog, simpledialog
 
-# 1. 選擇檔案
+# 選擇檔案
 def select_file():
     root = tk.Tk()
     root.withdraw()
     return filedialog.askopenfilename()
 
-# 2. 分類土壤類型
+# 分類土壤類型
 def classify_soil_type(Ic):
     Ic = round(Ic, 2)
     if Ic <= 2.05:
@@ -23,23 +23,15 @@ def classify_soil_type(Ic):
     elif Ic >= 2.95:
         return 5
 
-# 3. 標記差異
+# 標記差異
 def mark(previous_data, current_data):
     mark_list = [''] * len(current_data)
-
-    # 如果長度不一致，報錯並返回空標記列表
-    if len(previous_data) != len(current_data):
-        print("Error: Lengths of previous_data and current_data do not match!")
-        return mark_list
-
     for i in range(len(current_data)):
-        if previous_data[i] != current_data[i]:
-            print(f'不同：{previous_data[i]} != {current_data[i]}')
-            mark_list[i] = '*'  # 更新標記
-
+        if i < len(previous_data) and previous_data[i] != current_data[i]:
+            mark_list[i] = '*'
     return mark_list
 
-# 4. 數據組織 (土壤類型、厚度、Ic 平均)
+# 數據組織 (土壤類型、厚度、Ic 平均)
 def data_array(Soil_Type, Ic):
     layer, thickness, ic_avg = [], [], []
     current_soil_type = None
@@ -63,12 +55,12 @@ def data_array(Soil_Type, Ic):
 
     return [layer, thickness, ic_avg]
 
-# 5. 合併層
-def merge_layer(soil_data, threshold):
+# 合併層
+def merge_layer(soil_data, thickness_threshold):
     while True:
         merged = False
         for i in range(len(soil_data) - 1, 0, -1):
-            if soil_data.iloc[i, 1] <= threshold:
+            if soil_data.iloc[i, 1] <= thickness_threshold:
                 merged = True
                 if i == len(soil_data) - 1:
                     soil_data.iloc[i - 1, 1] += soil_data.iloc[i, 1]
@@ -89,7 +81,7 @@ def merge_layer(soil_data, threshold):
 
     return soil_data
 
-# 6. 寫入處理後的數據
+# 生成最終數據
 def write_merged_data(soil_data):
     data_input = []
     for i in range(len(soil_data)):
@@ -98,32 +90,7 @@ def write_merged_data(soil_data):
         data_input.extend([soil_type] * thickness)
     return data_input
 
-# 7. 建立一個視窗，輸入要合併的厚度
-def merge_layer_window(soil_data):
-    window = tk.Tk()
-    window.title('合併層')
-    window.geometry('300x200')
-
-    label = tk.Label(window, text='輸入要合併的厚度')
-    label.pack()
-
-    entry = tk.Entry(window)
-    entry.pack()
-
-    threshold = []
-
-    def merge_layers():
-        threshold_value = int(entry.get())
-        threshold.append(threshold_value)  # 保存輸入的數值
-        window.destroy()
-
-    button = tk.Button(window, text='確定', command=merge_layers)
-    button.pack()
-
-    window.mainloop()
-    return threshold[0] if threshold else None  # 確保返回值有效
-
-# 8. 主函數，讀取 Excel，處理數據，並導出結果
+# 主函數，讀取 Excel，處理數據，並導出結果
 def main():
     # 讀取 Excel 檔案
     selected_file = select_file()
@@ -132,8 +99,9 @@ def main():
 
     # 資料處理
     df_copy['Ic'] = df_copy['Ic'].interpolate(method='linear').round(2)
-    df_copy['Soil Type'] = df_copy['Soil Type'].fillna(method='ffill')
-    
+    df_copy['Soil Type'] = df_copy['Soil Type'].ffill()
+
+    # 分類土壤類型
     Soil_Type_CECI = df_copy['Soil Type']
     Soil_Type_5 = df_copy['Ic'].apply(classify_soil_type)
     df_copy['Soil Type 5 type'] = Soil_Type_5
@@ -143,27 +111,51 @@ def main():
     layers, thicknesses, ic_avgs = data_array(Soil_Type_5, df_copy['Ic'])
     result_df = pd.DataFrame({'Soil Type': layers, 'Thickness': thicknesses, 'Ic_avg': ic_avgs})
 
-    # 顯示合併層窗口並取得用戶輸入的厚度
-    threshold = merge_layer_window(result_df)
+    # 第一次合併（合併厚度 <= 5cm）
+    result_array = merge_layer(result_df, 5)
 
-    # 合併層並生成新的數據
-    if threshold is not None:
-        result_array = merge_layer(result_df, threshold)
-        data_input = write_merged_data(result_array)
-        df_copy['5cm'] = data_input
+    # 寫入第一次處理後的數據
+    data_input = write_merged_data(result_array)
+    
+    # 確保數據長度匹配
+    if len(data_input) > len(df_copy):
+        data_input = data_input[:len(df_copy)]  # 截斷數據以匹配長度
+    elif len(data_input) < len(df_copy):
+        data_input.extend([''] * (len(df_copy) - len(data_input)))  # 填充空值以匹配長度
 
-        # 標記差異
-        mark_array = mark(Soil_Type_5, data_input)
-        if len(mark_array) == len(df_copy):  # 檢查長度是否一致
-            df_copy['Mark'] = mark_array
-        else:
-            print("標記失敗：長度不一致")
+    df_copy['5cm'] = data_input
 
-        # 將處理後的資料存入新的 Excel 檔案
-        df_copy.to_excel('output.xlsx', index=False)
-        print('資料處理完成')
-    else:
-        print("未輸入有效的合併厚度")
+    # 提示用戶輸入合併厚度
+    root = tk.Tk()
+    root.withdraw()
+    thickness_threshold = (simpledialog.askinteger("合併層厚度", "請輸入合併厚度的閾值 (cm):"))/2
+    if thickness_threshold is None:
+        thickness_threshold = 5  # 默認為5cm
+    root.destroy()
+
+    # 第二次合併（基於用戶輸入的厚度閾值）
+    result_array = merge_layer(result_df, thickness_threshold)
+
+    # 寫入處理後的數據
+    data_input = write_merged_data(result_array)
+
+    # 確保數據長度匹配
+    if len(data_input) > len(df_copy):
+        data_input = data_input[:len(df_copy)]  # 截斷數據以匹配長度
+    elif len(data_input) < len(df_copy):
+        data_input.extend([''] * (len(df_copy) - len(data_input)))  # 填充空值以匹配長度
+
+    df_copy['Mark1']=''
+    df_copy['合併後'] = data_input
+
+
+    # 標記差異
+    mark_array = mark(Soil_Type_5, data_input)
+    df_copy['Mark1'] = mark_array  # 確保這一步正確地應用到 DataFrame 中
+
+    # 將處理後的資料存入新的 Excel 檔案
+    df_copy.to_excel('output.xlsx', index=False)
+    print('資料處理完成')
 
 if __name__ == "__main__":
     main()
