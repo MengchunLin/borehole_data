@@ -103,7 +103,7 @@ def main():
     # 分類土壤類型
     Soil_Type_5 = df_copy['Ic'].apply(classify_soil_type)
     df_copy['Soil Type 5 type'] = Soil_Type_5
-    df_copy['Mark'] = ''
+    df_copy['Mark1'] = ''
 
     # 計算層數、厚度和 Ic 平均值
     layers, thicknesses, ic_avgs = data_array(Soil_Type_5, df_copy['Ic'])
@@ -122,6 +122,7 @@ def main():
         data_input1.extend([''] * (len(df_copy) - len(data_input1)))  # 填充空值以匹配長度
 
     df_copy['5cm'] = data_input1
+    df_copy['Mark2']=''
     #對比soil type 5 和 5cm
     mark_array = mark(Soil_Type_5, data_input1)
 
@@ -149,6 +150,7 @@ def main():
         data_input.extend([''] * (len(df_copy) - len(data_input)))  # 填充空值以匹配長度
 
     df_copy['合併後'] = data_input
+
 
     # 標記第二次合併後的數據
     mark_array = mark(data_input1, data_input)
