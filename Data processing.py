@@ -57,27 +57,26 @@ def data_array(Soil_Type, Ic):
 
 # 合併層
 def merge_layer(soil_data, thickness_threshold):
-    while True:
-        merged = False
-        for i in range(len(soil_data) - 1, 0, -1):
-            if soil_data.iloc[i, 1] <= thickness_threshold:
-                merged = True
-                if i == len(soil_data) - 1:
+    i = 0  # Start index at 0 and manually control the iteration
+    while i < len(soil_data):
+        if soil_data.iloc[i, 1] <= thickness_threshold:
+            if i == len(soil_data) - 1:  # If it's the last row
+                soil_data.iloc[i - 1, 1] += soil_data.iloc[i, 1]  # Merge with the previous row
+                soil_data.iloc[i, 0] = soil_data.iloc[i - 1, 0]  # Adjust layer designation
+            else:
+                if soil_data.iloc[i + 1, 0] == soil_data.iloc[i - 1, 0]:  # Merge with surrounding layers
                     soil_data.iloc[i - 1, 1] += soil_data.iloc[i, 1]
-                    soil_data.iloc[i, 0] = soil_data.iloc[i - 1, 0]
-                else:
-                    if soil_data.iloc[i + 1, 0] == soil_data.iloc[i - 1, 0]:
-                        soil_data.iloc[i - 1, 1] += soil_data.iloc[i, 1]
-                    elif soil_data.iloc[i - 1, 0] != soil_data.iloc[i + 1, 0]:
-                        if abs(soil_data.iloc[i - 1, 2] - soil_data.iloc[i, 2]) > abs(soil_data.iloc[i, 2] - soil_data.iloc[i + 1, 2]):
-                            soil_data.iloc[i + 1, 1] += soil_data.iloc[i, 1]
-                        else:
-                            soil_data.iloc[i - 1, 1] += soil_data.iloc[i, 1]
-
-                soil_data = soil_data.drop(i).reset_index(drop=True)
-
-        if not merged:
-            break
+                elif soil_data.iloc[i - 1, 0] != soil_data.iloc[i + 1, 0]:
+                    if abs(soil_data.iloc[i - 1, 2] - soil_data.iloc[i, 2]) > abs(soil_data.iloc[i, 2] - soil_data.iloc[i + 1, 2]):
+                        soil_data.iloc[i + 1, 1] += soil_data.iloc[i, 1]  # Merge with the next row
+                    else:
+                        soil_data.iloc[i - 1, 1] += soil_data.iloc[i, 1]  # Merge with the previous row
+            
+            # Drop the current row after merging
+            soil_data = soil_data.drop(i).reset_index(drop=True)
+            i -= 1  # Move back one index to compensate for the dropped row
+        
+        i += 1  # Move to the next index
 
     return soil_data
 
@@ -102,7 +101,6 @@ def main():
     df_copy['Soil Type'] = df_copy['Soil Type'].ffill()
 
     # 分類土壤類型
-    Soil_Type_CECI = df_copy['Soil Type']
     Soil_Type_5 = df_copy['Ic'].apply(classify_soil_type)
     df_copy['Soil Type 5 type'] = Soil_Type_5
     df_copy['Mark'] = ''
@@ -112,32 +110,37 @@ def main():
     result_df = pd.DataFrame({'Soil Type': layers, 'Thickness': thicknesses, 'Ic_avg': ic_avgs})
 
     # 第一次合併（合併厚度 <= 5cm）
-    result_array = merge_layer(result_df, 5)
+    result_array1 = merge_layer(result_df, 5)
 
     # 寫入第一次處理後的數據
-    data_input = write_merged_data(result_array)
+    data_input1 = write_merged_data(result_array1)
     
     # 確保數據長度匹配
-    if len(data_input) > len(df_copy):
-        data_input = data_input[:len(df_copy)]  # 截斷數據以匹配長度
-    elif len(data_input) < len(df_copy):
-        data_input.extend([''] * (len(df_copy) - len(data_input)))  # 填充空值以匹配長度
+    if len(data_input1) > len(df_copy):
+        data_input1 = data_input1[:len(df_copy)]  # 截斷數據以匹配長度
+    elif len(data_input1) < len(df_copy):
+        data_input1.extend([''] * (len(df_copy) - len(data_input1)))  # 填充空值以匹配長度
 
-    df_copy['5cm'] = data_input
+    df_copy['5cm'] = data_input1
+    #對比soil type 5 和 5cm
+    mark_array = mark(Soil_Type_5, data_input1)
+
+    # 標記第一次合併後的數據
+    df_copy['Mark1'] = mark_array
 
     # 提示用戶輸入合併厚度
     root = tk.Tk()
     root.withdraw()
-    thickness_threshold = (simpledialog.askinteger("合併層厚度", "請輸入合併厚度的閾值 (cm):"))/2
+    thickness_threshold = (simpledialog.askinteger("合併層厚度", "請輸入合併厚度的閾值 (cm):")) / 2
     if thickness_threshold is None:
         thickness_threshold = 5  # 默認為5cm
     root.destroy()
 
     # 第二次合併（基於用戶輸入的厚度閾值）
-    result_array = merge_layer(result_df, thickness_threshold)
+    result_array2 = merge_layer(result_array1, thickness_threshold)
 
-    # 寫入處理後的數據
-    data_input = write_merged_data(result_array)
+    # 寫入第二次處理後的數據
+    data_input = write_merged_data(result_array2)
 
     # 確保數據長度匹配
     if len(data_input) > len(df_copy):
@@ -145,13 +148,11 @@ def main():
     elif len(data_input) < len(df_copy):
         data_input.extend([''] * (len(df_copy) - len(data_input)))  # 填充空值以匹配長度
 
-    df_copy['Mark1']=''
     df_copy['合併後'] = data_input
 
-
-    # 標記差異
-    mark_array = mark(Soil_Type_5, data_input)
-    df_copy['Mark1'] = mark_array  # 確保這一步正確地應用到 DataFrame 中
+    # 標記第二次合併後的數據
+    mark_array = mark(data_input1, data_input)
+    df_copy['Mark2'] = mark_array  # 標記第二次合併的變化
 
     # 將處理後的資料存入新的 Excel 檔案
     df_copy.to_excel('output.xlsx', index=False)
