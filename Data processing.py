@@ -80,6 +80,25 @@ def merge_layer(soil_data, thickness_threshold):
 
     return soil_data
 
+# 簡化合併soil data
+def merge_processed_data(soil_data):
+    i = 0
+    while i < len(soil_data) - 1:
+        # 如果相邻两行的土壤类型相同
+        if soil_data.iloc[i, 0] == soil_data.iloc[i + 1, 0]:
+            # 合并厚度
+            soil_data.iloc[i, 1] += soil_data.iloc[i + 1, 1]
+            
+            # 删除合并后的行
+            soil_data = soil_data.drop(i + 1).reset_index(drop=True)
+        else:
+            # 只有在没有合并的情况下才增加索引
+            i += 1
+    
+    return soil_data
+
+
+
 # 生成最終數據
 def write_merged_data(soil_data):
     data_input = []
@@ -114,6 +133,11 @@ def main():
 
     # 寫入第一次處理後的數據
     data_input1 = write_merged_data(result_array1)
+    df_copy['5cm'] = data_input1
+    df_copy['Mark2']=''
+    result_array1 = merge_processed_data(result_array1)
+    print(result_array1)
+    print('第一次合併完成')
     
     # 確保數據長度匹配
     if len(data_input1) > len(df_copy):
@@ -121,8 +145,7 @@ def main():
     elif len(data_input1) < len(df_copy):
         data_input1.extend([''] * (len(df_copy) - len(data_input1)))  # 填充空值以匹配長度
 
-    df_copy['5cm'] = data_input1
-    df_copy['Mark2']=''
+
     #對比soil type 5 和 5cm
     mark_array = mark(Soil_Type_5, data_input1)
 
