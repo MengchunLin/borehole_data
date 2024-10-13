@@ -116,7 +116,7 @@ def main():
     df_copy = df.copy()
 
     # 資料處理
-    df_copy['Ic'] = df_copy['Ic'].interpolate(method='linear').round(2)
+    df_copy['Ic'] = df_copy['Ic'].interpolate(method='linear')
     df_copy['Soil Type'] = df_copy['Soil Type'].ffill()
 
     # 分類土壤類型
