@@ -3,11 +3,13 @@ import numpy as np
 import tkinter as tk
 from tkinter import filedialog, simpledialog
 
+process_data=[]
 # 選擇檔案
 def select_file():
     root = tk.Tk()
     root.withdraw()
-    return filedialog.askopenfilename()
+    file= filedialog.askopenfilename(title="選擇檔案")
+    return file
 
 # 分類土壤類型
 def classify_soil_type(Ic):
@@ -108,11 +110,8 @@ def write_merged_data(soil_data):
         data_input.extend([soil_type] * thickness)
     return data_input
 
-# 主函數，讀取 Excel，處理數據，並導出結果
-def main():
-    # 讀取 Excel 檔案
-    selected_file = select_file()
-    df = pd.read_excel(selected_file, header=0)
+def process_file(file):
+    df = pd.read_excel(file, header=0)
     df_copy = df.copy()
 
     # 資料處理
@@ -133,7 +132,7 @@ def main():
 
     # 寫入第一次處理後的數據
     data_input1 = write_merged_data(result_array1)
-    df_copy['5cm'] = data_input1
+    df_copy['10cm'] = data_input1
     df_copy['Mark2']=''
     result_array1 = merge_processed_data(result_array1)
     print(result_array1)
@@ -180,8 +179,18 @@ def main():
     df_copy['Mark2'] = mark_array  # 標記第二次合併的變化
 
     # 將處理後的資料存入新的 Excel 檔案
-    df_copy.to_excel('output.xlsx', index=False)
+    processed_file = file.replace('.xlsx', '_processed.xlsx')
+    process_data.append(processed_file)
+    df_copy.to_excel(processed_file, index=False)
     print('資料處理完成')
+
+# 主函數，讀取 Excel，處理數據，並導出結果
+def main():
+    file = select_file()
+    process_file(file)
+    file = select_file()
+    process_file(file)
+    print(process_data)
 
 if __name__ == "__main__":
     main()
